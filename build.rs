@@ -7,7 +7,7 @@ fn main() {
             .qml_file("qml/main.qml"),
     )
     .qt_module("Network")
-    .files(["src/lib.rs"])
+    .files(["src/app.rs"])
     .build();
 
     // При использовании `include!("lib.rs")` в main.rs бинарный таргет не

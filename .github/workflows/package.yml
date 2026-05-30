@@ -73,14 +73,15 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           [ -n "$VERSION" ] || VERSION="0.1.0"
 
-          mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS,SRPMSBUILD}
           sed "s/@VERSION@/$VERSION/g" packaging/rpm/wallpapersearcher.spec > rpmbuild/SPECS/wallpapersearcher.spec
 
-          mkdir -p rpmbuild/BUILDROOT/wallpapersearcher-${VERSION}-1.x86_64/usr/bin
-          install -m 755 target/release/wallpapersearcher \
-            rpmbuild/BUILDROOT/wallpapersearcher-${VERSION}-1.x86_64/usr/bin/
+          cp target/release/wallpapersearcher rpmbuild/SOURCES/
 
-          rpmbuild --define "_topdir ${PWD}/rpmbuild" -bb rpmbuild/SPECS/wallpapersearcher.spec
+          rpmbuild \
+            --define "_topdir ${PWD}/rpmbuild" \
+            --define "_sourcedir ${PWD}/rpmbuild/SOURCES" \
+            -bb rpmbuild/SPECS/wallpapersearcher.spec
 
           mkdir -p dist
           mv rpmbuild/RPMS/x86_64/*.rpm dist/
@@ -103,10 +104,9 @@ jobs:
       - name: Install Qt 6
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.7"
+          version: "6.5.3"
           host: windows
-          arch: win64_msvc2022_64
-          modules: qtquick3d qtquicktimeline
+          arch: win64_msvc2019_64
           cache: true
 
       - name: Build (release)
@@ -116,15 +116,14 @@ jobs:
         run: dotnet tool install --global wix
 
       - name: Package .msi
+        shell: pwsh
         run: |
           $version = "$env:GITHUB_REF_NAME".TrimStart("v")
           if (-not $version) { $version = "0.1.0" }
 
           mkdir -p dist -Force
 
-          wix extension add WixToolset.UI.wixext
-
-          wix build packaging/wix/Product.wxs `
+          & wix build packaging/wix/Product.wxs `
             -arch x64 `
             -d Version="$version" `
             -d SourceDir="$((Get-Item .).FullName)\target\release" `

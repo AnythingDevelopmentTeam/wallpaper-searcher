@@ -1,8 +1,6 @@
-// Включаем библиотечный код напрямую в бинарный таргет.
-// Это гарантирует, что все cxxbridge-символы находятся в .o-файле бинарника,
-// и линковщику не нужно извлекать их из rlib (что не срабатывало из-за
-// пассивного связывания rlib как архива без --whole-archive).
-include!("lib.rs");
+#![allow(non_snake_case, dead_code)]
+
+include!("app.rs");
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
 

@@ -326,7 +326,7 @@ Window {
                             onClicked: {
                                 mouse.accepted = true
                                 if (model.full)
-                                    searcher.saveImage(model.full)
+                                    searcher.save_image(model.full)
                             }
                         }
                     }
