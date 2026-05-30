@@ -1,0 +1,136 @@
+name: Package
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  deb:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install Qt 6 (Ubuntu)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-declarative-dev \
+            qml6-module-qtquick qml6-module-qtquick-controls \
+            qml6-module-qtquick-layouts qml6-module-qtquick-window \
+            qml6-module-qtquick-templates qml6-module-qtqml-workerscript
+
+      - name: Build (release)
+        run: cargo build --release
+
+      - name: Package .deb
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ -n "$VERSION" ] || VERSION="0.1.0"
+
+          mkdir -p pkg/DEBIAN pkg/usr/bin
+
+          sed "s/@VERSION@/$VERSION/g" packaging/deb/control > pkg/DEBIAN/control
+
+          install -m 755 target/release/wallpapersearcher pkg/usr/bin/
+
+          dpkg-deb --build pkg
+          mkdir -p dist
+          mv pkg.deb "dist/wallpapersearcher_${VERSION}_amd64.deb"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wallpapersearcher-deb
+          path: dist/*.deb
+
+  rpm:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install Qt 6 + rpmbuild
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-declarative-dev \
+            qml6-module-qtquick qml6-module-qtquick-controls \
+            qml6-module-qtquick-layouts qml6-module-qtquick-window \
+            qml6-module-qtquick-templates qml6-module-qtqml-workerscript \
+            rpm
+
+      - name: Build (release)
+        run: cargo build --release
+
+      - name: Package .rpm
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ -n "$VERSION" ] || VERSION="0.1.0"
+
+          mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          sed "s/@VERSION@/$VERSION/g" packaging/rpm/wallpapersearcher.spec > rpmbuild/SPECS/wallpapersearcher.spec
+
+          mkdir -p rpmbuild/BUILDROOT/wallpapersearcher-${VERSION}-1.x86_64/usr/bin
+          install -m 755 target/release/wallpapersearcher \
+            rpmbuild/BUILDROOT/wallpapersearcher-${VERSION}-1.x86_64/usr/bin/
+
+          rpmbuild --define "_topdir ${PWD}/rpmbuild" -bb rpmbuild/SPECS/wallpapersearcher.spec
+
+          mkdir -p dist
+          mv rpmbuild/RPMS/x86_64/*.rpm dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wallpapersearcher-rpm
+          path: dist/*.rpm
+
+  msi:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.7"
+          host: windows
+          arch: win64_msvc2022_64
+          modules: qtquick3d qtquicktimeline
+          cache: true
+
+      - name: Build (release)
+        run: cargo build --release
+
+      - name: Install WiX Toolset
+        run: dotnet tool install --global wix
+
+      - name: Package .msi
+        run: |
+          $version = "$env:GITHUB_REF_NAME".TrimStart("v")
+          if (-not $version) { $version = "0.1.0" }
+
+          mkdir -p dist -Force
+
+          wix extension add WixToolset.UI.wixext
+
+          wix build packaging/wix/Product.wxs `
+            -arch x64 `
+            -d Version="$version" `
+            -d SourceDir="$((Get-Item .).FullName)\target\release" `
+            -out "dist\wallpapersearcher-${version}-x64.msi"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wallpapersearcher-msi
+          path: dist/*.msi
