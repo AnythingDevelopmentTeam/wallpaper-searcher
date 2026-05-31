@@ -31,8 +31,11 @@ jobs:
 
       - name: Package .deb
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          [ -n "$VERSION" ] || VERSION="0.1.0"
+          if [[ "$GITHUB_REF_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.1.0"
+          fi
 
           mkdir -p pkg/DEBIAN pkg/usr/bin
 
@@ -70,8 +73,11 @@ jobs:
 
       - name: Package .rpm
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          [ -n "$VERSION" ] || VERSION="0.1.0"
+          if [[ "$GITHUB_REF_NAME" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.1.0"
+          fi
 
           mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS,SRPMSBUILD}
           sed "s/@VERSION@/$VERSION/g" packaging/rpm/wallpapersearcher.spec > rpmbuild/SPECS/wallpapersearcher.spec
@@ -84,7 +90,7 @@ jobs:
             -bb rpmbuild/SPECS/wallpapersearcher.spec
 
           mkdir -p dist
-          mv rpmbuild/RPMS/x86_64/*.rpm dist/
+          find rpmbuild/RPMS -name '*.rpm' -exec mv {} dist/ \;
 
       - uses: actions/upload-artifact@v4
         with:
@@ -118,8 +124,12 @@ jobs:
       - name: Package .msi
         shell: pwsh
         run: |
-          $version = "$env:GITHUB_REF_NAME".TrimStart("v")
-          if (-not $version) { $version = "0.1.0" }
+          $version = "$env:GITHUB_REF_NAME"
+          if ($version -match '^v?\d+\.\d+\.\d+') {
+            $version = $version.TrimStart("v")
+          } else {
+            $version = "0.1.0"
+          }
 
           mkdir -p dist -Force
 
@@ -164,7 +174,7 @@ jobs:
               export CARGO_HOME=/run/cargo RUSTUP_HOME=/run/rustup
               export PATH="$CARGO_HOME/bin:$PATH"
               if ! command -v rustc &>/dev/null; then
-                curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+                curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
                 . "$CARGO_HOME/env"
               fi
               cd /run/build
