@@ -87,7 +87,3 @@ QT_QPA_PLATFORM=offscreen ./target/release/wallpapersearcher
 | cxx-qt    | 0.8     |
 | reqwest   | 0.12    |
 | Wallhaven | v1 (free, no key) |
-
-## License
-
-MIT OR Apache-2.0
