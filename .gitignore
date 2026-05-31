@@ -15,3 +15,7 @@ cmake-build-*/
 # OS
 .DS_Store
 Thumbs.db
+
+# Build artifacts
+flatpak-repo/
+.flatpak-builder/
