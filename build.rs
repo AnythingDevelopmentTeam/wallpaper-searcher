@@ -4,16 +4,19 @@ use std::path::PathBuf;
 fn main() {
     CxxQtBuilder::new_qml_module(
         QmlModule::new("com.wallpapersearcher")
-            .qml_file("qml/main.qml"),
+            .qml_file("qml/main.qml")
+            .qml_file("qml/SearchBar.qml")
+            .qml_file("qml/SettingsDialog.qml")
+            .qml_file("qml/AboutDialog.qml")
+            .qml_file("qml/SearchIdeas.qml")
+            .qml_file("qml/FavoritesSection.qml")
+            .qml_file("qml/Lang.qml")
+            .qml_file("qml/FullPreview.qml"),
     )
     .qt_module("Network")
     .files(["src/app.rs"])
     .build();
 
-    // При использовании `include!("lib.rs")` в main.rs бинарный таргет не
-    // наследует `cargo:rustc-link-lib=` от скрипта сборки (они применяются
-    // только к lib-таргету). Явно добавляем сгенерированные .a-библиотеки
-    // в команду линковки бинарника через `cargo::rustc-link-arg-bins`.
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
     for lib in [

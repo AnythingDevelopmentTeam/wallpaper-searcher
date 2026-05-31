@@ -1,0 +1,5 @@
+[Runtime]
+name=org.anythingdevteam.wallpapersearcher.Debug
+
+[ExtensionOf]
+ref=app/org.anythingdevteam.wallpapersearcher/x86_64/master

@@ -4,7 +4,7 @@ Name:       wallpapersearcher
 Version:    @VERSION@
 Release:    1
 Summary:    Desktop wallpaper search app
-License:    MIT OR Apache-2.0
+License:    GPL-3.0-only
 URL:        https://github.com/wallpapersearcher
 BuildArch:  x86_64
 BuildRoot:  %{_tmppath}/%{name}-buildroot
