@@ -97,53 +97,6 @@ jobs:
           name: wallpapersearcher-rpm
           path: dist/*.rpm
 
-  msi:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: pwsh
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      - name: Install Qt 6
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: "6.5.3"
-          host: windows
-          arch: win64_msvc2019_64
-          cache: true
-
-      - name: Build (release)
-        run: cargo build --release
-
-      - name: Install WiX Toolset
-        run: dotnet tool install --global wix
-
-      - name: Package .msi
-        shell: pwsh
-        run: |
-          $version = "$env:GITHUB_REF_NAME"
-          if ($version -match '^v?\d+\.\d+\.\d+') {
-            $version = $version.TrimStart("v")
-          } else {
-            $version = "0.1.0"
-          }
-
-          mkdir -p dist -Force
-
-          & wix build packaging/wix/Product.wxs `
-            -arch x64 `
-            -d Version="$version" `
-            -d SourceDir="$((Get-Item .).FullName)\target\release" `
-            -out "dist\wallpapersearcher-${version}-x64.msi"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wallpapersearcher-msi
-          path: dist/*.msi
-
   flatpak:
     runs-on: ubuntu-latest
     container:

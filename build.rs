@@ -18,23 +18,14 @@ fn main() {
     .build();
 
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap());
-    let is_windows = std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows";
-    let ext = if is_windows { "lib" } else { "a" };
-    let prefix = if is_windows { "" } else { "lib" };
 
-    for name in [
-        "wallpapersearcher-cxxqt-generated",
-        "cxx-qt-call-init-crate_wallpapersearcher",
-        "cxx-qt-call-init-qml_module_com_wallpapersearcher",
+    for lib in [
+        "libwallpapersearcher-cxxqt-generated.a",
+        "libcxx-qt-call-init-crate_wallpapersearcher.a",
+        "libcxx-qt-call-init-qml_module_com_wallpapersearcher.a",
     ] {
-        let lib = format!("{}{}.{}", prefix, name, ext);
-        let full = out.join(&lib);
-        if is_windows {
-            println!("cargo::rustc-link-arg-bins=/WHOLEARCHIVE:{}", full.display());
-        } else {
-            println!("cargo::rustc-link-arg-bins=-Wl,--whole-archive");
-            println!("cargo::rustc-link-arg-bins=-Wl,{}", full.display());
-            println!("cargo::rustc-link-arg-bins=-Wl,--no-whole-archive");
-        }
+        println!("cargo::rustc-link-arg-bins=-Wl,--whole-archive");
+        println!("cargo::rustc-link-arg-bins=-Wl,{}", out.join(lib).display());
+        println!("cargo::rustc-link-arg-bins=-Wl,--no-whole-archive");
     }
 }
