@@ -8,7 +8,7 @@ fn main() {
             .qml_file("qml/SearchBar.qml")
             .qml_file("qml/SettingsDialog.qml")
             .qml_file("qml/AboutDialog.qml")
-            .qml_file("qml/SearchIdeas.qml")
+
             .qml_file("qml/FavoritesSection.qml")
             .qml_file("qml/Lang.qml")
             .qml_file("qml/FullPreview.qml"),

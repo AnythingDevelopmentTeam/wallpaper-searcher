@@ -14,6 +14,7 @@ Popup {
     width: 360
     height: 300
 
+    property QtObject searcher: null
     property string language: "ru"
 
     Lang { id: lang; lng: root.language }
@@ -44,10 +45,18 @@ Popup {
         }
 
         Label {
-            text: lang.t("version")
+            text: searcher ? searcher.version : ""
             font.pixelSize: 14
             color: sysPalette.mid
             Layout.alignment: Qt.AlignHCenter
+        }
+
+        Label {
+            text: searcher && searcher.codename ? searcher.codename : ""
+            font.pixelSize: 12
+            color: sysPalette.mid
+            Layout.alignment: Qt.AlignHCenter
+            visible: text.length > 0
         }
 
         Label {

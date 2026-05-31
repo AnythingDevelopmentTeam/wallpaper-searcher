@@ -31,6 +31,8 @@ pub mod qobject {
         #[qproperty(QString, search_source)]
         #[qproperty(QString, unsplash_key)]
         #[qproperty(QString, language)]
+        #[qproperty(QString, version)]
+        #[qproperty(QString, codename)]
         type WallpaperSearch = super::WallpaperSearchRust;
 
         #[qinvokable]
@@ -68,6 +70,15 @@ pub mod qobject {
 
         #[qsignal]
         fn favoritesChanged(self: Pin<&mut Self>);
+
+        #[qinvokable]
+        fn check_for_updates(self: Pin<&mut Self>);
+
+        #[qsignal]
+        fn updateAvailable(self: Pin<&mut Self>, version: QString, download_url: QString, changelog: QString);
+
+        #[qsignal]
+        fn updateCheckError(self: Pin<&mut Self>, error: QString);
     }
 }
 
@@ -85,6 +96,8 @@ pub struct WallpaperSearchRust {
     search_source: QString,
     unsplash_key: QString,
     language: QString,
+    version: QString,
+    codename: QString,
 }
 
 impl Default for WallpaperSearchRust {
@@ -103,6 +116,8 @@ impl Default for WallpaperSearchRust {
             favorites_json: QString::from(""),
             search_source: QString::from(""),
             unsplash_key: QString::from(""),
+            version: QString::from(&load_current_version()),
+            codename: QString::from(&load_current_codename()),
         }
     }
 }
@@ -368,6 +383,96 @@ impl qobject::WallpaperSearch {
         self.as_mut().set_favorites_json(QString::from(&json));
         self.as_mut().favoritesChanged();
     }
+
+    pub fn check_for_updates(mut self: Pin<&mut Self>) {
+        let client = reqwest::blocking::Client::new();
+        let url = "https://raw.githubusercontent.com/anythingdevelopmentteam/wallpaper-searcher/main/update-check.xml";
+        let result = client.get(url).send();
+        match result {
+            Ok(resp) => {
+                if !resp.status().is_success() {
+                    self.as_mut().updateCheckError(QString::from(&format!("HTTP {}", resp.status())));
+                    return;
+                }
+                let text = resp.text().unwrap_or_default();
+                let latest_ver = extract_xml_tag(&text, "version");
+                match latest_ver {
+                    Some(ver) => {
+                        let current = load_current_version();
+                        if compare_versions(&ver, &current).is_gt() {
+                            let download = extract_xml_tag(&text, "download_url").unwrap_or_default();
+                            let changelog = extract_xml_tag(&text, "changelog").unwrap_or_default();
+                            self.as_mut().updateAvailable(
+                                QString::from(&ver),
+                                QString::from(&download),
+                                QString::from(&changelog),
+                            );
+                        } else {
+                            self.as_mut().updateCheckError(QString::from("You have the latest version"));
+                        }
+                    }
+                    None => {
+                        self.as_mut().updateCheckError(QString::from("Failed to parse update check XML"));
+                    }
+                }
+            }
+            Err(e) => {
+                self.as_mut().updateCheckError(QString::from(&format!("Network error: {}", e)));
+            }
+        }
+    }
+}
+
+fn load_current_version() -> String {
+    let xml = include_str!("CurrentVersion.xml");
+    extract_xml_tag(xml, "version").unwrap_or_else(|| "0.0.0".to_string())
+}
+
+fn load_current_codename() -> String {
+    let xml = include_str!("CurrentVersion.xml");
+    extract_xml_tag(xml, "codename").unwrap_or_default()
+}
+
+fn extract_xml_tag(text: &str, tag: &str) -> Option<String> {
+    let mut reader = quick_xml::Reader::from_str(text);
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(quick_xml::events::Event::Start(ref e)) => {
+                if e.name().as_ref() == tag.as_bytes() {
+                    match reader.read_event_into(&mut buf) {
+                        Ok(quick_xml::events::Event::Text(ref t)) => {
+                            return Some(t.unescape().unwrap_or_default().to_string());
+                        }
+                        _ => return None,
+                    }
+                }
+            }
+            Ok(quick_xml::events::Event::Eof) => break,
+            Err(_) => return None,
+            _ => {}
+        }
+        buf.clear();
+    }
+    None
+}
+
+fn parse_version(v: &str) -> Vec<u32> {
+    v.split('.').filter_map(|s| s.parse::<u32>().ok()).collect()
+}
+
+fn compare_versions(a: &str, b: &str) -> std::cmp::Ordering {
+    let va = parse_version(a);
+    let vb = parse_version(b);
+    for i in 0..std::cmp::max(va.len(), vb.len()) {
+        let na = va.get(i).copied().unwrap_or(0);
+        let nb = vb.get(i).copied().unwrap_or(0);
+        match na.cmp(&nb) {
+            std::cmp::Ordering::Equal => continue,
+            other => return other,
+        }
+    }
+    std::cmp::Ordering::Equal
 }
 
 fn load_favorites() -> Vec<WallpaperResult> {
@@ -407,28 +512,47 @@ fn config_dir() -> PathBuf {
     PathBuf::from(home).join(".config").join("wallpapersearcher")
 }
 
+struct DesktopCmd {
+    key: &'static str,
+    run: fn(&str, &str) -> Result<(), String>,
+}
+
 fn set_wallpaper(path: &PathBuf) -> Result<(), String> {
     let path_str = path.to_string_lossy().to_string();
     let uri = format!("file://{}", path_str);
     let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_lowercase();
-    if desktop.contains("gnome") || desktop.contains("unity") {
-        run_cmd("gsettings", &["set", "org.gnome.desktop.background", "picture-uri", &uri])?;
-        let _ = run_cmd("gsettings", &["set", "org.gnome.desktop.background", "picture-uri-dark", &uri]);
-        return Ok(());
+
+    let cmds: &[DesktopCmd] = &[
+        DesktopCmd { key: "gnome", run: |_, u| { run_cmd("gsettings", &["set", "org.gnome.desktop.background", "picture-uri", u])?; let _ = run_cmd("gsettings", &["set", "org.gnome.desktop.background", "picture-uri-dark", u]); Ok(()) } },
+        DesktopCmd { key: "unity", run: |_, u| { run_cmd("gsettings", &["set", "org.gnome.desktop.background", "picture-uri", u])?; let _ = run_cmd("gsettings", &["set", "org.gnome.desktop.background", "picture-uri-dark", u]); Ok(()) } },
+        DesktopCmd { key: "kde", run: |s, _| run_cmd("plasma-apply-wallpaperimage", &[s]) },
+        DesktopCmd { key: "plasma", run: |s, _| run_cmd("plasma-apply-wallpaperimage", &[s]) },
+        DesktopCmd { key: "xfce", run: |s, _| {
+            let output = run_cmd_output("xfconf-query", &["-c", "xfce4-desktop", "-l"]).unwrap_or_default();
+            for line in output.lines() {
+                let t = line.trim();
+                if t.contains("last-image") || t.contains("image-path") {
+                    let _ = run_cmd("xfconf-query", &["-c", "xfce4-desktop", "-p", t, "-s", s]);
+                }
+            }
+            Ok(())
+        }},
+        DesktopCmd { key: "cinnamon", run: |_, u| run_cmd("gsettings", &["set", "org.cinnamon.desktop.background", "picture-uri", u]) },
+        DesktopCmd { key: "mate", run: |s, _| run_cmd("gsettings", &["set", "org.mate.background", "picture-filename", s]) },
+        DesktopCmd { key: "budgie", run: |_, u| run_cmd("gsettings", &["set", "org.gnome.desktop.background", "picture-uri", u]) },
+        DesktopCmd { key: "deepin", run: |_, u| run_cmd("gsettings", &["set", "com.deepin.wrap.gnome.desktop.background", "picture-uri", u]) },
+        DesktopCmd { key: "lxqt", run: |s, _| run_cmd("pcmanfm", &["--set-wallpaper", s]) },
+        DesktopCmd { key: "lxde", run: |s, _| run_cmd("pcmanfm", &["--set-wallpaper", s]) },
+        DesktopCmd { key: "sway", run: |s, _| run_cmd("swaybg", &["-i", s, "-m", "fill"]) },
+        DesktopCmd { key: "hyprland", run: |s, _| run_cmd("hyprctl", &["hyprpaper", "wallpaper", ",", s]) },
+    ];
+
+    for cmd in cmds {
+        if desktop.contains(cmd.key) {
+            return (cmd.run)(&path_str, &uri);
+        }
     }
-    if desktop.contains("kde") || desktop.contains("plasma") { return run_cmd("plasma-apply-wallpaperimage", &[&path_str]); }
-    if desktop.contains("xfce") {
-        let output = run_cmd_output("xfconf-query", &["-c", "xfce4-desktop", "-l"]).unwrap_or_default();
-        for line in output.lines() { let t = line.trim(); if t.contains("last-image") || t.contains("image-path") { let _ = run_cmd("xfconf-query", &["-c", "xfce4-desktop", "-p", t, "-s", &path_str]); } }
-        return Ok(());
-    }
-    if desktop.contains("cinnamon") { return run_cmd("gsettings", &["set", "org.cinnamon.desktop.background", "picture-uri", &uri]); }
-    if desktop.contains("mate") { return run_cmd("gsettings", &["set", "org.mate.background", "picture-filename", &path_str]); }
-    if desktop.contains("budgie") { return run_cmd("gsettings", &["set", "org.gnome.desktop.background", "picture-uri", &uri]); }
-    if desktop.contains("deepin") { return run_cmd("gsettings", &["set", "com.deepin.wrap.gnome.desktop.background", "picture-uri", &uri]); }
-    if desktop.contains("lxqt") || desktop.contains("lxde") { return run_cmd("pcmanfm", &["--set-wallpaper", &path_str]); }
-    if desktop.contains("sway") { return run_cmd("swaybg", &["-i", &path_str, "-m", "fill"]); }
-    if desktop.contains("hyprland") { return run_cmd("hyprctl", &["hyprpaper", "wallpaper", ",", &path_str]); }
+
     run_cmd("feh", &["--bg-scale", &path_str])
         .or_else(|_| run_cmd("nitrogen", &["--set-scaled", &path_str]))
         .or_else(|_| run_cmd("gsettings", &["set", "org.gnome.desktop.background", "picture-uri", &uri]))

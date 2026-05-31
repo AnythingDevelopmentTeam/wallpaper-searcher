@@ -9,7 +9,7 @@ Window {
     id: root
 
     visible: true
-    title: "Wallpaper Searcher"
+    title: "Wallpaper Searcher" + (searcher.codename ? " · " + searcher.codename : "")
     width: 960
     height: 680
     minimumWidth: 480
@@ -59,6 +59,7 @@ Window {
     }
 
     property bool showPreview: false
+    property bool showSettings: false
 
     ListModel { id: wallpaperModel }
     ListModel { id: favoritesModel }
@@ -81,15 +82,24 @@ Window {
 
     Component.onCompleted: loadFavorites()
 
-    SettingsDialog { id: settingsDialog; searcher: searcher }
-    AboutDialog { id: aboutDialog; language: searcher.language }
+    // Settings page
+    SettingsDialog {
+        id: settingsDialog
+        anchors.fill: parent
+        searcher: searcher
+        visible: showSettings
+        onBack: showSettings = false
+        z: 10
+    }
+
+    AboutDialog { id: aboutDialog; searcher: searcher; language: searcher.language }
 
     // Empty state
     ColumnLayout {
         anchors.centerIn: parent
         width: Math.min(parent.width * 0.65, 640)
         spacing: 12
-        visible: wallpaperModel.count === 0 && !searcher.loading && !errorLabel.visible
+        visible: wallpaperModel.count === 0 && !searcher.loading && !errorLabel.visible && !showSettings
 
         Label {
             text: lang.t("search_title")
@@ -102,17 +112,7 @@ Window {
             Layout.fillWidth: true; Layout.topMargin: 4
             loading: searcher.loading; big: true; language: searcher.language
             onSearchRequested: function(q) { errorLabel.visible = false; searcher.search(q) }
-            onSettingsRequested: settingsDialog.open()
-        }
-
-        SearchIdeas {
-            Layout.fillWidth: true
-            Layout.topMargin: 4
-            language: searcher.language
-            onIdeaClicked: function(text) {
-                errorLabel.visible = false
-                searcher.search(text)
-            }
+            onSettingsRequested: showSettings = true
         }
     }
 
@@ -121,7 +121,7 @@ Window {
         anchors.fill: parent
         anchors.margins: 16
         spacing: 8
-        visible: wallpaperModel.count > 0 || searcher.loading || errorLabel.visible
+        visible: (wallpaperModel.count > 0 || searcher.loading || errorLabel.visible) && !showSettings
 
         RowLayout {
             Layout.fillWidth: true
@@ -147,7 +147,7 @@ Window {
             Layout.fillWidth: true
             loading: searcher.loading; language: searcher.language
             onSearchRequested: function(q) { errorLabel.visible = false; searcher.search(q) }
-            onSettingsRequested: settingsDialog.open()
+            onSettingsRequested: showSettings = true
         }
 
         // Favorites
@@ -234,7 +234,7 @@ Window {
                     anchors.fill: parent; anchors.margins: 4
                     color: sysPalette.mid
                     visible: thumb.status === Image.Error
-                    Label { anchors.centerIn: parent; text: "⚠"; font.pixelSize: 20; color: "#f38ba8" }
+                    Label { anchors.centerIn: parent; text: "\u26A0"; font.pixelSize: 20; color: "#f38ba8" }
                 }
 
                 MouseArea {
@@ -262,7 +262,7 @@ Window {
                         Rectangle {
                             width: 28; height: 28; radius: 4
                             color: btnFav.pressed ? sysPalette.highlight : "#000000b0"
-                            Label { anchors.centerIn: parent; text: "♥"; font.pixelSize: 12; color: isFavorite(model.full) ? "#ff4444" : "white" }
+                            Label { anchors.centerIn: parent; text: "\u2665"; font.pixelSize: 12; color: isFavorite(model.full) ? "#ff4444" : "white" }
                             MouseArea {
                                 id: btnFav; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                 onClicked: {
@@ -278,7 +278,7 @@ Window {
                         Rectangle {
                             width: 28; height: 28; radius: 4
                             color: btnSave.pressed ? sysPalette.highlight : "#000000b0"
-                            Label { anchors.centerIn: parent; text: "💾"; font.pixelSize: 12 }
+                            Label { anchors.centerIn: parent; text: "\uD83D\uDCBE"; font.pixelSize: 12 }
                             MouseArea {
                                 id: btnSave; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                 onClicked: { mouse.accepted = true; if (model.full) searcher.save_image(model.full) }
@@ -288,7 +288,7 @@ Window {
                         Rectangle {
                             width: 28; height: 28; radius: 4
                             color: btnApply.pressed ? sysPalette.highlight : "#000000b0"
-                            Label { anchors.centerIn: parent; text: "🖥"; font.pixelSize: 12 }
+                            Label { anchors.centerIn: parent; text: "\uD83D\uDDA5"; font.pixelSize: 12 }
                             MouseArea {
                                 id: btnApply; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                 onClicked: {
